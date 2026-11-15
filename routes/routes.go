@@ -30,6 +30,7 @@ func New(cfg *config.Config) *gin.Engine {
 	dashCtl := controller.NewDashboardController(db.DB)
 	logCtl := controller.NewLogController(db.DB)
 	permCtl := controller.NewPermissionController(db.DB)
+	statsCtl := controller.NewStatsController(db.DB)
 
 	api := r.Group("/api/v1")
 	{
@@ -93,6 +94,14 @@ func New(cfg *config.Config) *gin.Engine {
 
 		priv.GET("/dashboard/overview", dashCtl.Overview)
 		priv.GET("/logs", middleware.RequirePerm("audit:log"), logCtl.List)
+
+		// 运营统计：供前端 ECharts 看板，统一挂 data:dashboard 权限点
+		stats := priv.Group("/stats", middleware.RequirePerm("data:dashboard"))
+		{
+			stats.GET("/users/growth", statsCtl.UserGrowth)
+			stats.GET("/users/activity", statsCtl.UserActivity)
+			stats.GET("/logs/frequency", statsCtl.LogFrequency)
+		}
 	}
 
 	return r
