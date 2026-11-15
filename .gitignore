@@ -1,18 +1,42 @@
-# 编译产物
-/industrial_admin.exe
-/dist/
+# If you prefer the allow list template instead of the deny list, see community template:
+# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+#
+# Binaries for programs and plugins
 *.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
 *.test
+
+# Code coverage profiles and other test artifacts
 *.out
+coverage.*
+!coverage.go
+*.coverprofile
+profile.cov
 
-# 依赖
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# env file
+.env
+
+# Editor/IDE
+# .idea/
+# .vscode/
+
+# 项目补充：本地构建产物与本机配置
+/dist/
 /vendor/
-
-# 本地配置（含口令，禁止提交）
 .env
 config.local.toml
-
-# 编辑器与系统
 .idea/
 .vscode/
 .DS_Store
