@@ -58,10 +58,10 @@ func Init(cfg *config.Config) error {
 		return err
 	}
 
-	sqlDB.SetMaxOpenConns(cfg.DB.MaxOpen)           // 最大打开连接数，防止高并发压垮数据库
-	sqlDB.SetMaxIdleConns(cfg.DB.MaxIdle)           // 最大空闲连接数，过小会导致频繁建连
-	sqlDB.SetConnMaxLifetime(time.Hour)             // 连接最长存活 1 小时，规避 MySQL 主动断连
-	sqlDB.SetConnMaxIdleTime(10 * time.Minute)      // 空闲超过 10 分钟即释放
+	sqlDB.SetMaxOpenConns(cfg.DB.MaxOpen)      // 最大打开连接数，防止高并发压垮数据库
+	sqlDB.SetMaxIdleConns(cfg.DB.MaxIdle)      // 最大空闲连接数，过小会导致频繁建连
+	sqlDB.SetConnMaxLifetime(time.Hour)        // 连接最长存活 1 小时，规避 MySQL 主动断连
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute) // 空闲超过 10 分钟即释放
 
 	// Ping 必须带超时：数据库不可达时不能把启动流程挂死
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
