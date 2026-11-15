@@ -75,13 +75,19 @@ func New(cfg *config.Config) *gin.Engine {
 
 		depts := priv.Group("/depts")
 		{
+			depts.GET("", middleware.RequirePerm("dept:create"), deptCtl.List)
 			depts.GET("/tree", deptCtl.Tree)
+			depts.GET("/:id", middleware.RequirePerm("dept:create"), deptCtl.Detail)
 			depts.POST("", middleware.RequirePerm("dept:create"), deptCtl.Create)
+			depts.PUT("/:id", middleware.RequirePerm("dept:create"), deptCtl.Update)
+			depts.DELETE("/:id", middleware.RequirePerm("dept:create"), deptCtl.Remove)
 		}
 
 		configs := priv.Group("/configs")
 		{
 			configs.GET("", cfgCtl.List)
+			configs.PUT("", middleware.RequirePerm("config:update"), cfgCtl.BatchUpdate)
+			configs.GET("/:id", cfgCtl.Detail)
 			configs.PUT("/:id", middleware.RequirePerm("config:update"), cfgCtl.Update)
 		}
 

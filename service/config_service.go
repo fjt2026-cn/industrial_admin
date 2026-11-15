@@ -77,6 +77,33 @@ func (s *ConfigService) List(category string) ([]model.SysConfig, error) {
 	return rows, nil
 }
 
+// Detail 按标识读取单条参数，供编辑弹窗回显
+func (s *ConfigService) Detail(id uint64) (*model.SysConfig, error) {
+	var row model.SysConfig
+	if err := s.db.Where("id = ?", id).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, utils.NewAppError(response.CodeNotFound, "参数不存在")
+		}
+		return nil, utils.WrapAppError(response.CodeServerError, "查询参数失败", err)
+	}
+	return &row, nil
+}
+
+// checkValue 按 value_type 校验取值格式：1 字符串、2 整数、3 布尔
+func checkValue(row *model.SysConfig, value string) error {
+	switch row.ValueType {
+	case 2:
+		if _, err := strconv.Atoi(value); err != nil {
+			return utils.NewAppError(response.CodeParamInvalid, "参数 "+row.ConfigKey+" 必须为整数")
+		}
+	case 3:
+		if value != "true" && value != "false" {
+			return utils.NewAppError(response.CodeParamInvalid, "参数 "+row.ConfigKey+" 必须为 true 或 false")
+		}
+	}
+	return nil
+}
+
 // Update 修改参数值：按 value_type 校验格式，成功后刷新缓存
 func (s *ConfigService) Update(id uint64, value string) error {
 	var row model.SysConfig
@@ -86,23 +113,61 @@ func (s *ConfigService) Update(id uint64, value string) error {
 		}
 		return utils.WrapAppError(response.CodeServerError, "查询参数失败", err)
 	}
-
-	switch row.ValueType {
-	case 2: // 整数
-		if _, err := strconv.Atoi(value); err != nil {
-			return utils.NewAppError(response.CodeParamInvalid, "参数值必须为整数")
-		}
-	case 3: // 布尔
-		if value != "true" && value != "false" {
-			return utils.NewAppError(response.CodeParamInvalid, "参数值必须为 true 或 false")
-		}
+	if err := checkValue(&row, value); err != nil {
+		return err
 	}
 
-	res := s.db.Model(&model.SysConfig{}).Where("id = ?", id).
-		Updates(map[string]any{"config_value": value})
-	if res.Error != nil {
-		return utils.WrapAppError(response.CodeServerError, "更新参数失败", res.Error)
+	if err := s.db.Model(&model.SysConfig{}).Where("id = ?", id).
+		Updates(map[string]any{"config_value": value}).Error; err != nil {
+		return utils.WrapAppError(response.CodeServerError, "更新参数失败", err)
 	}
 
 	return s.Reload()
+}
+
+// ConfigItem 批量修改的单条入参
+type ConfigItem struct {
+	ID    uint64 `json:"id" binding:"required"`
+	Value string `json:"value"`
+}
+
+// BatchUpdate 批量修改：一次事务内逐条校验并写入，全部成功才提交并刷新缓存
+func (s *ConfigService) BatchUpdate(items []ConfigItem) (int, error) {
+	if len(items) == 0 {
+		return 0, utils.NewAppError(response.CodeParamInvalid, "待修改参数不能为空")
+	}
+
+	updated := 0
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		for _, it := range items {
+			var row model.SysConfig
+			if e := tx.Where("id = ?", it.ID).First(&row).Error; e != nil {
+				if errors.Is(e, gorm.ErrRecordNotFound) {
+					return utils.NewAppError(response.CodeNotFound, "参数不存在")
+				}
+				return e
+			}
+			if e := checkValue(&row, it.Value); e != nil {
+				return e
+			}
+			if e := tx.Model(&model.SysConfig{}).Where("id = ?", it.ID).
+				Updates(map[string]any{"config_value": it.Value}).Error; e != nil {
+				return e
+			}
+			updated++
+		}
+		return nil
+	})
+	if err != nil {
+		var ae *utils.AppError
+		if errors.As(err, &ae) {
+			return 0, ae
+		}
+		return 0, utils.WrapAppError(response.CodeServerError, "批量修改参数失败", err)
+	}
+
+	if err := s.Reload(); err != nil {
+		return 0, err
+	}
+	return updated, nil
 }
