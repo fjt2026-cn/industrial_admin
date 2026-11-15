@@ -45,18 +45,40 @@ type LoginResult struct {
 	Menus     []*utils.TreeNode  `json:"menus"`
 }
 
+// recordLogin 登录留痕：成功与失败都落一条操作日志，供审计与锁定排查
+func (s *AuthService) recordLogin(userID uint64, username string, result int8, msg, ip string) {
+	entry := model.OperationLog{
+		Username: username,
+		Module:   "登录鉴权",
+		Action:   "登录",
+		Method:   "POST",
+		URL:      "/api/v1/auth/login",
+		IP:       ip,
+		Result:   result,
+		ErrorMsg: msg,
+	}
+	if userID != 0 {
+		uid := userID
+		entry.UserID = &uid
+	}
+	// 日志失败不影响登录主流程
+	s.db.Create(&entry)
+}
+
 // Login 校验账号口令、处理锁定计数、签发令牌并返回菜单与权限
 func (s *AuthService) Login(username, password, ip string) (*LoginResult, error) {
 	var u model.User
 	err := s.db.Where("username = ?", username).First(&u).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			s.recordLogin(0, username, 0, "账号不存在", ip)
 			return nil, utils.NewAppError(response.CodeUnauthorized, "账号或口令错误")
 		}
 		return nil, utils.WrapAppError(response.CodeServerError, "登录失败", err)
 	}
 
 	if u.LockUntil != nil && u.LockUntil.After(time.Now()) {
+		s.recordLogin(u.ID, u.Username, 0, "账号已锁定", ip)
 		return nil, utils.NewAppError(response.CodeUnauthorized,
 			fmt.Sprintf("账号已锁定，请于 %s 后重试", u.LockUntil.Format("15:04:05")))
 	}
@@ -69,10 +91,12 @@ func (s *AuthService) Login(username, password, ip string) (*LoginResult, error)
 			updates["login_fail_count"] = 0
 		}
 		s.db.Model(&model.User{}).Where("id = ?", u.ID).Updates(updates)
+		s.recordLogin(u.ID, u.Username, 0, "账号或口令错误", ip)
 		return nil, utils.NewAppError(response.CodeUnauthorized, "账号或口令错误")
 	}
 
 	if u.Status != 1 {
+		s.recordLogin(u.ID, u.Username, 0, "账号已停用", ip)
 		return nil, utils.NewAppError(response.CodeForbidden, "账号已停用，请联系管理员")
 	}
 
@@ -93,6 +117,8 @@ func (s *AuthService) Login(username, password, ip string) (*LoginResult, error)
 	if err != nil {
 		return nil, err
 	}
+
+	s.recordLogin(u.ID, u.Username, 1, "", ip)
 
 	return &LoginResult{Token: token, ExpiresAt: exp, User: *info, Perms: perms, Menus: menus}, nil
 }
