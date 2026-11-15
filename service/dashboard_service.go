@@ -27,12 +27,12 @@ type DistItem struct {
 }
 
 type Overview struct {
-	UserTotal   int64      `json:"userTotal"`
-	TodayActive int64      `json:"todayActive"`
-	TodayOps    int64      `json:"todayOps"`
-	FailOps     int64      `json:"failOps"`
+	UserTotal   int64       `json:"userTotal"`
+	TodayActive int64       `json:"todayActive"`
+	TodayOps    int64       `json:"todayOps"`
+	FailOps     int64       `json:"failOps"`
 	UserTrend   []TrendItem `json:"userTrend"`
-	ModuleDist  []DistItem `json:"moduleDist"`
+	ModuleDist  []DistItem  `json:"moduleDist"`
 }
 
 // Overview 看板聚合：一次请求返回概览、趋势与分布，减少往返

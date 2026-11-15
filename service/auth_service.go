@@ -38,11 +38,11 @@ type UserInfo struct {
 }
 
 type LoginResult struct {
-	Token     string             `json:"token"`
-	ExpiresAt int64              `json:"expiresAt"`
-	User      UserInfo           `json:"user"`
-	Perms     []string           `json:"perms"`
-	Menus     []*utils.TreeNode  `json:"menus"`
+	Token     string            `json:"token"`
+	ExpiresAt int64             `json:"expiresAt"`
+	User      UserInfo          `json:"user"`
+	Perms     []string          `json:"perms"`
+	Menus     []*utils.TreeNode `json:"menus"`
 }
 
 // recordLogin 登录留痕：成功与失败都落一条操作日志，供审计与锁定排查
