@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -84,6 +85,10 @@ func (s *DeptService) Create(req *CreateDeptReq) (uint64, error) {
 		LeaderID: req.LeaderID, SortNo: req.SortNo, Remark: req.Remark, Status: 1,
 	}
 	if err := s.db.Create(&d).Error; err != nil {
+		// 兜底：并发场景下唯一索引仍可能拦下重复编码，映射成 409 而不是 500
+		if strings.Contains(err.Error(), "Duplicate entry") {
+			return 0, utils.NewAppError(response.CodeConflict, "部门编码已存在")
+		}
 		return 0, utils.WrapAppError(response.CodeServerError, "创建部门失败", err)
 	}
 	return d.ID, nil
@@ -257,6 +262,8 @@ func (s *DeptService) Remove(id uint64) error {
 			}
 			return utils.WrapAppError(response.CodeServerError, "查询部门失败", e)
 		}
-		return tx.Delete(&model.Dept{}, id).Error
+		// 部门属于基础配置数据，这里做物理删除：表上有 dept_code 唯一索引，
+		// 若只做软删除，同名编码的行仍留在索引里，之后再建同编码部门会触发唯一键冲突。
+		return tx.Unscoped().Delete(&model.Dept{}, id).Error
 	})
 }

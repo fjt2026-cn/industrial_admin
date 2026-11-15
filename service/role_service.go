@@ -166,11 +166,32 @@ func (s *RoleService) Grant(roleID uint64, permIDs []uint64) error {
 		return utils.NewAppError(response.CodeForbidden, "内置角色的权限不可修改")
 	}
 
+	// 先校验提交的权限点是否都存在：早期版本直接写库，非法 id 会触发外键约束错误
+	// 被统一兜底成 500，对调用方不可解释；这里提前拦下并返回 400，同时去掉重复 id。
+	ids := make([]uint64, 0, len(permIDs))
+	seen := make(map[uint64]struct{}, len(permIDs))
+	for _, pid := range permIDs {
+		if _, ok := seen[pid]; ok {
+			continue
+		}
+		seen[pid] = struct{}{}
+		ids = append(ids, pid)
+	}
+	if len(ids) > 0 {
+		var existCount int64
+		if e := s.db.Model(&model.Permission{}).Where("id IN ?", ids).Count(&existCount).Error; e != nil {
+			return utils.WrapAppError(response.CodeServerError, "查询权限点失败", e)
+		}
+		if int(existCount) != len(ids) {
+			return utils.NewAppError(response.CodeParamInvalid, "存在无效的权限点标识")
+		}
+	}
+
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if e := tx.Where("role_id = ?", roleID).Delete(&model.RolePermission{}).Error; e != nil {
 			return e
 		}
-		for _, pid := range permIDs {
+		for _, pid := range ids {
 			if e := tx.Create(&model.RolePermission{RoleID: roleID, PermID: pid}).Error; e != nil {
 				return e
 			}
