@@ -203,7 +203,77 @@ func (s *UserService) Delete(id uint64) error {
 	})
 }
 
-// ResetPassword 管理员重置口令，可由业务层决定是否强制改密
+// Roles 返回用户当前绑定的角色标识与名称，供前端回显多选
+func (s *UserService) Roles(userID uint64) ([]uint64, []string, error) {
+	var cnt int64
+	if err := s.db.Model(&model.User{}).Where("id = ?", userID).Count(&cnt).Error; err != nil {
+		return nil, nil, utils.WrapAppError(response.CodeServerError, "查询用户失败", err)
+	}
+	if cnt == 0 {
+		return nil, nil, utils.NewAppError(response.CodeNotFound, "用户不存在")
+	}
+
+	ids := make([]uint64, 0)
+	if err := s.db.Model(&model.UserRole{}).Where("user_id = ?", userID).
+		Pluck("role_id", &ids).Error; err != nil {
+		return nil, nil, utils.WrapAppError(response.CodeServerError, "查询用户角色失败", err)
+	}
+
+	names := make([]string, 0)
+	if len(ids) > 0 {
+		if err := s.db.Model(&model.Role{}).Where("id IN ?", ids).
+			Pluck("role_name", &names).Error; err != nil {
+			return nil, nil, utils.WrapAppError(response.CodeServerError, "查询角色名称失败", err)
+		}
+	}
+	return ids, names, nil
+}
+
+// BindRoles 用户与角色绑定：事务内整体替换，重复标识先去重，角色须存在
+func (s *UserService) BindRoles(userID uint64, roleIDs []uint64) error {
+	var u model.User
+	if err := s.db.Where("id = ?", userID).First(&u).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return utils.NewAppError(response.CodeNotFound, "用户不存在")
+		}
+		return utils.WrapAppError(response.CodeServerError, "查询用户失败", err)
+	}
+
+	uniq := make([]uint64, 0, len(roleIDs))
+	seen := make(map[uint64]bool, len(roleIDs))
+	for _, rid := range roleIDs {
+		if rid == 0 || seen[rid] {
+			continue
+		}
+		seen[rid] = true
+		uniq = append(uniq, rid)
+	}
+
+	if len(uniq) > 0 {
+		var found int64
+		if err := s.db.Model(&model.Role{}).Where("id IN ?", uniq).
+			Count(&found).Error; err != nil {
+			return utils.WrapAppError(response.CodeServerError, "查询角色失败", err)
+		}
+		if int(found) != len(uniq) {
+			return utils.NewAppError(response.CodeParamInvalid, "存在不合法的角色标识")
+		}
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", userID).Delete(&model.UserRole{}).Error; err != nil {
+			return err
+		}
+		for _, rid := range uniq {
+			if err := tx.Create(&model.UserRole{UserID: userID, RoleID: rid}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// ResetPassword 管理员重置口令，同时清空失败计数与锁定时间
 func (s *UserService) ResetPassword(id uint64, newPassword string) error {
 	hash, err := utils.HashPassword(newPassword)
 	if err != nil {

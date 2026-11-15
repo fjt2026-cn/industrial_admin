@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -52,6 +53,7 @@ func (h *UserController) Create(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	logKeyOp(c, "新增用户", fmt.Sprintf("账号 %s，分配角色 %d 个", req.Username, len(req.RoleIDs)))
 	response.OK(c, gin.H{"id": id})
 }
 
@@ -83,6 +85,7 @@ func (h *UserController) Delete(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	logKeyOp(c, "删除用户", fmt.Sprintf("用户标识 %d", id))
 	response.OK(c, nil)
 }
 
@@ -107,6 +110,42 @@ func (h *UserController) ResetPassword(c *gin.Context) {
 		response.Error(c, err)
 		return
 	}
+	logKeyOp(c, "重置口令", fmt.Sprintf("用户标识 %d", id))
+	response.OK(c, nil)
+}
+
+// Roles 查询用户已绑定的角色：GET /api/v1/users/:id/roles
+func (h *UserController) Roles(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	ids, names, err := h.svc.Roles(id)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	response.OK(c, gin.H{"roleIds": ids, "roleNames": names})
+}
+
+// BindRoles 用户角色绑定：PUT /api/v1/users/:id/roles，事务内整体替换
+func (h *UserController) BindRoles(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		RoleIDs []uint64 `json:"roleIds" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, response.CodeParamInvalid, "参数格式错误，roleIds 不能为空")
+		return
+	}
+	if err := h.svc.BindRoles(id, req.RoleIDs); err != nil {
+		response.Error(c, err)
+		return
+	}
+	logKeyOp(c, "用户角色绑定", fmt.Sprintf("用户标识 %d，绑定 %d 个角色", id, len(req.RoleIDs)))
 	response.OK(c, nil)
 }
 

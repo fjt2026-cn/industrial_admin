@@ -29,6 +29,7 @@ func New(cfg *config.Config) *gin.Engine {
 	cfgCtl := controller.NewConfigController(db.DB)
 	dashCtl := controller.NewDashboardController(db.DB)
 	logCtl := controller.NewLogController(db.DB)
+	permCtl := controller.NewPermissionController(db.DB)
 
 	api := r.Group("/api/v1")
 	{
@@ -48,14 +49,28 @@ func New(cfg *config.Config) *gin.Engine {
 			users.PUT("/:id", middleware.RequirePerm("user:update"), userCtl.Update)
 			users.DELETE("/:id", middleware.RequirePerm("user:delete"), userCtl.Delete)
 			users.POST("/:id/password", middleware.RequirePerm("user:resetpwd"), userCtl.ResetPassword)
+			// 用户角色绑定：授权类操作，复用 role:grant 权限点
+			users.GET("/:id/roles", middleware.RequirePerm("role:grant"), userCtl.Roles)
+			users.PUT("/:id/roles", middleware.RequirePerm("role:grant"), userCtl.BindRoles)
 		}
 
 		roles := priv.Group("/roles")
 		{
 			roles.GET("", middleware.RequirePerm("sys:role"), roleCtl.List)
 			roles.POST("", middleware.RequirePerm("role:grant"), roleCtl.Create)
+			roles.PUT("/:id", middleware.RequirePerm("role:grant"), roleCtl.Update)
+			roles.DELETE("/:id", middleware.RequirePerm("role:grant"), roleCtl.Delete)
 			roles.GET("/:id/permissions", middleware.RequirePerm("role:grant"), roleCtl.Permissions)
 			roles.PUT("/:id/permissions", middleware.RequirePerm("role:grant"), roleCtl.Grant)
+		}
+
+		// 权限点管理：复用 role:grant 权限码，避免改动初始化权限数据
+		perms := priv.Group("/permissions")
+		{
+			perms.GET("", middleware.RequirePerm("role:grant"), permCtl.List)
+			perms.POST("", middleware.RequirePerm("role:grant"), permCtl.Create)
+			perms.PUT("/:id", middleware.RequirePerm("role:grant"), permCtl.Update)
+			perms.DELETE("/:id", middleware.RequirePerm("role:grant"), permCtl.Delete)
 		}
 
 		depts := priv.Group("/depts")
