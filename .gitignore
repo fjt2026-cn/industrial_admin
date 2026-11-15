@@ -1,0 +1,19 @@
+# 编译产物
+/industrial_admin.exe
+/dist/
+*.exe
+*.test
+*.out
+
+# 依赖
+/vendor/
+
+# 本地配置（含口令，禁止提交）
+.env
+config.local.toml
+
+# 编辑器与系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
