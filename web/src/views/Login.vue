@@ -23,8 +23,6 @@
           </el-button>
         </el-form-item>
       </el-form>
-
-      <div class="login-tip">默认管理员账号：admin / Admin@123</div>
     </el-card>
   </div>
 </template>
@@ -113,12 +111,5 @@ async function onSubmit() {
 
 .login-btn {
   width: 100%;
-}
-
-.login-tip {
-  font-size: 12px;
-  color: #a8abb2;
-  text-align: center;
-  margin-top: 4px;
 }
 </style>
